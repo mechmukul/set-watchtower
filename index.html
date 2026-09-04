@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SET Watchtower — Security Tooling Health & Triage</title>
+<style>
+  :root{
+    --bg:#0d141d; --panel:#151f2b; --panel2:#1b2836; --line:#26364a;
+    --text:#e8eef5; --muted:#93a4b8; --accent:#4f9cff;
+    --green:#3ddc97; --amber:#ffb454; --red:#ff5c5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b111a,#0d141d);color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:26px}
+  h1{margin:0;font-size:22px;letter-spacing:.3px}
+  .sub{color:var(--muted);margin:4px 0 18px;font-size:13px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:9px;
+    padding:9px 14px;cursor:pointer;font-size:13px;transition:.15s}
+  .btn:hover{border-color:var(--accent);background:#22344a}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:600}
+  .btn.warn{border-color:#5a3a2a}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:12px 16px;min-width:120px}
+  .tile .n{font-size:24px;font-weight:700}
+  .tile .l{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.6px}
+  .cols{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h2{margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+  .tools{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:560px){.tools{grid-template-columns:1fr}}
+  .tool{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;position:relative}
+  .tool .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:7px;box-shadow:0 0 8px currentColor}
+  .tool .name{font-weight:600}
+  .tool .cat{color:var(--muted);font-size:11px}
+  .tool .meta{color:var(--muted);font-size:12px;margin-top:6px}
+  .tool.g{border-color:#1f5a44} .tool.a{border-color:#5a4a2a} .tool.r{border-color:#5a2a2a;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{background:var(--panel2)}50%{background:#241a1f}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{color:var(--muted);text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:8px;border-bottom:1px solid #1e2b3a;vertical-align:top}
+  .pri{font-weight:700;padding:2px 7px;border-radius:6px;font-size:11px}
+  .p1{color:#ff5c5c;background:#3a1e22} .p2{color:#ffb454;background:#3a2f1e}
+  .p3{color:#4f9cff;background:#1e2c3a} .p4{color:#93a4b8;background:#20293a}
+  .owner.none{color:var(--red)} .owner.set{color:var(--green)}
+  .src{color:var(--muted);font-size:11px}
+  .det{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1e2b3a}
+  .det b{color:var(--text)} .det .c{color:var(--muted)}
+  .badge{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px}
+  footer{color:var(--muted);font-size:12px;margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+  code{background:#0c1621;border:1px solid var(--line);padding:1px 6px;border-radius:6px;color:#bcd3ee}
+</style>
+</head>
+<body>
+  <h1>SET Watchtower</h1>
+  <div class="sub">Security tooling health, incident response, and intake triage &nbsp;&middot;&nbsp; a working model of the Security Engineering Team remit (Run &middot; Respond &middot; Triage)</div>
+
+  <div class="bar">
+    <button class="btn primary" onclick="simulateOutage()">Simulate tool outage</button>
+    <button class="btn" onclick="autoAssign()">Auto-assign intake</button>
+    <button class="btn warn" onclick="resetDemo()">Reset demo</button>
+    <span class="badge" id="clock"></span>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="cols">
+    <div class="card">
+      <h2>Security toolkit health &mdash; keep the lights green</h2>
+      <div class="tools" id="tools"></div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:18px">
+        <h2>Intake &amp; incident queue</h2>
+        <table><thead><tr><th>ID</th><th>Item</th><th>Pri</th><th>Owner</th></tr></thead>
+        <tbody id="queue"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Detection coverage</h2>
+        <div id="detections"></div>
+        <div style="color:var(--muted);font-size:12px;margin-top:8px">Full KQL in <code>detections/detections.md</code> (incl. 4 DLP rules).</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Demo with simulated telemetry so it runs offline by double-click. A production build ingests
+    each tool's health API / heartbeat and the Service Management queue, applies the same rules, and
+    raises an incident when a security control goes silent &mdash; because a blind SIEM is worse than none.
+    Built by Mukul Mech to mirror the Capgemini SET role.
+  </footer>
+
+<script>
+const TEAM = ["A. Kaur","J. Obi","M. Mech","R. Singh"];
+const DETECTIONS = {"Data Loss Prevention":4,"Identity / Access":3,"Endpoint / Malware":3,"Email Gateway":2,"Tool Health":2};
+let rr = 0;
+
+function seed(){
+  return {
+    tools:[
+      {name:"Microsoft Sentinel", cat:"SIEM", hb:1,  drop:0},
+      {name:"Microsoft Defender", cat:"Endpoint / XDR", hb:2, drop:0},
+      {name:"Email Gateway", cat:"Mail security", hb:1, drop:0},
+      {name:"IDPS", cat:"Intrusion detection", hb:3, drop:0},
+      {name:"Greenbone GVM", cat:"Vulnerability mgmt", hb:4, drop:0},
+      {name:"Malware Protection", cat:"Anti-malware", hb:2, drop:55},
+      {name:"Netskope", cat:"SSE / DLP", hb:2, drop:0}
+    ],
+    queue:[
+      {id:"REQ-4021", src:"Service Mgmt Intake", txt:"New starter access request for Security stack", pri:3, owner:"A. Kaur"},
+      {id:"REQ-4022", src:"Engineering Mailbox", txt:"Tune Email Gateway rule: false positives on supplier domain", pri:2, owner:null},
+      {id:"INC-8890", src:"Sentinel", txt:"Possible data exfiltration to personal cloud (DLP)", pri:1, owner:null},
+      {id:"REQ-4023", src:"Engineering Mailbox", txt:"Enable new Defender ASR rule set for pilot group", pri:3, owner:null}
+    ]
+  };
+}
+let S = seed();
+
+function status(t){ if(t.hb>10) return "r"; if(t.drop>=50) return "a"; return "g"; }
+function statusColor(s){ return s==="r"?"var(--red)":s==="a"?"var(--amber)":"var(--green)"; }
+function reason(t){ const s=status(t);
+  if(s==="r") return "SILENT — no heartbeat for "+t.hb+"m, not ingesting";
+  if(s==="a") return "DEGRADED — ingestion down "+t.drop+"%";
+  return "Healthy — ingesting normally"; }
+
+function render(){
+  const tools = S.tools;
+  const healthy = tools.filter(t=>status(t)==="g").length;
+  const openInc = S.queue.filter(q=>q.id.startsWith("INC")).length;
+  const unassigned = S.queue.filter(q=>!q.owner).length;
+  const detTotal = Object.values(DETECTIONS).reduce((a,b)=>a+b,0);
+  document.getElementById("stats").innerHTML = [
+    ["Tools healthy", healthy+" / "+tools.length, healthy===tools.length?"var(--green)":"var(--amber)"],
+    ["Open incidents", openInc, openInc?"var(--red)":"var(--text)"],
+    ["Unassigned intake", unassigned, unassigned?"var(--amber)":"var(--green)"],
+    ["Detection rules", detTotal, "var(--text)"]
+  ].map(([l,n,c])=>`<div class="tile"><div class="n" style="color:${c}">${n}</div><div class="l">${l}</div></div>`).join("");
+
+  document.getElementById("tools").innerHTML = tools.map(t=>{
+    const s=status(t), c=statusColor(s);
+    return `<div class="tool ${s}">
+      <div><span class="dot" style="color:${c}"></span><span class="name">${t.name}</span></div>
+      <div class="cat">${t.cat}</div>
+      <div class="meta" style="color:${s==='g'?'var(--muted)':c}">${reason(t)}</div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("queue").innerHTML = S.queue.map(q=>`<tr>
+    <td>${q.id}<div class="src">${q.src}</div></td>
+    <td>${q.txt}</td>
+    <td><span class="pri p${q.pri}">P${q.pri}</span></td>
+    <td class="owner ${q.owner?'set':'none'}">${q.owner||'unassigned'}</td>
+  </tr>`).join("");
+
+  document.getElementById("detections").innerHTML = Object.entries(DETECTIONS)
+    .map(([k,v])=>`<div class="det"><b>${k}</b><span class="c">${v} rule${v>1?'s':''}</span></div>`).join("");
+}
+
+function simulateOutage(){
+  const healthy = S.tools.filter(t=>status(t)==="g");
+  if(!healthy.length){ alert("All tools already degraded — reset the demo."); return; }
+  const t = healthy[Math.floor(Math.random()*healthy.length)];
+  t.hb = 15; // silent
+  const n = 8891 + Math.floor(Math.random()*100);
+  S.queue.unshift({id:"INC-"+n, src:t.name+" health", txt:t.name+" stopped reporting — investigate connector / service", pri:1, owner:null});
+  render();
+}
+function autoAssign(){
+  S.queue.forEach(q=>{ if(!q.owner){ q.owner = TEAM[rr%TEAM.length]; rr++; } });
+  render();
+}
+function resetDemo(){ S = seed(); rr=0; render(); }
+
+function tick(){ document.getElementById("clock").textContent = "live " + new Date().toLocaleTimeString(); }
+setInterval(tick, 1000); tick();
+render();
+</script>
+</body>
+</html>
